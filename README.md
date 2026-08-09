@@ -4,6 +4,10 @@ A structured knowledge base for **system design interview preparation**. It orga
 concepts into five sections, each concept in its own markdown file so it can be expanded and
 refined over time.
 
+It also includes a growing set of **100 hands-on practice problems** organized into three difficulty
+levels (Basic, Intermediate, and Advanced), so you can apply the concepts to realistic design and
+implementation scenarios.
+
 > The 2026 edition reflects the reality that AI infrastructure concepts like embeddings and RAG are
 > now standard system design vocabulary — as common in interviews as caching and sharding were five
 > years ago.
@@ -95,6 +99,18 @@ How systems stay up under stress and how AI capabilities are integrated into pro
 | 48 | [Bloom Filter](./05-reliability-performance-and-modern-concepts/04-bloom-filter.md) |
 | 49 | [Embedding](./05-reliability-performance-and-modern-concepts/05-embedding.md) |
 | 50 | [RAG (Retrieval-Augmented Generation)](./05-reliability-performance-and-modern-concepts/06-rag.md) |
+
+## Practice Problems
+
+Beyond the concept library, the repo includes 100 practice problems grouped by difficulty. Each level
+has an `index.md` listing every problem in order, with each problem in its own file. These are prompts
+for practice and reference — implementations are added over time.
+
+| Level | Focus | Problems | Index |
+|-------|-------|----------|-------|
+| Basic | API design, database modeling, clean architecture, and standard Node.js patterns | 30 | [Basic Level](./06-basic-level-system-design-problems/index.md) |
+| Intermediate | Asynchronous processing, caching strategies, concurrency, and system optimization | 35 | [Intermediate Level](./07-intermediate-level-system-design-problems/index.md) |
+| Advanced | High availability, consistency, distributed transactions, and large-scale architecture | 35 | [Advanced Level](./08-advanced-level-system-design-problems/index.md) |
 
 ## Key Takeaways
 
