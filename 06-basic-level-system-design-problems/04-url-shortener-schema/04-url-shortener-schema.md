@@ -56,6 +56,82 @@ The common mistake is opening with *"I'll use Base62 and Redis."* Scope first.
 | Analytics | Basic click analytics required |
 | Users | Global |
 
+## Functional Requirements
+
+1. **Shorten** a valid long URL into a compact short code and return the short URL.
+2. **Redirect** a short code to its long URL (HTTP 301/302).
+3. Support optional **custom aliases** (e.g. `short.ly/my-launch`).
+4. Support optional **expiration** (TTL) so a short URL can stop resolving after a date.
+5. Allow the owner to **delete/disable** a short URL.
+6. Record **basic click analytics** (count, referrer, geo) *asynchronously*.
+7. Reject **malformed or malicious** URLs.
+
+## Non-Functional Requirements
+
+| Attribute | Target / approach |
+|---|---|
+| **Latency** | Redirect p99 < 100 ms — cache-first read path |
+| **Availability** | 99.99% on the redirect path (reads must survive component failure) |
+| **Scalability** | ~40K redirects/sec peak; stateless services + cache + CDN |
+| **Durability** | Mapping is the source of truth — replicated DB, never lost |
+| **Consistency** | Read-your-write on create; redirects tolerate brief cache staleness |
+| **Security** | Opaque codes, abuse/malware checks, rate limits, no open-redirect leaks |
+| **Cost** | Reads dominate ~100:1 — push them to cache/CDN, keep the DB for writes |
+
+## A Realistic Interview Conversation
+
+> **I** = Interviewer, **C** = Candidate.
+
+**I:** Design a URL shortener like Bitly.
+
+**C:** Let me scope first. Do we need custom aliases, expiration, analytics, and auth? And what scale?
+
+**I:** Custom aliases yes, optional expiration, basic analytics, auth optional. Assume 100M new URLs/month and 10B redirects/month.
+
+**C:** So it's overwhelmingly **read-heavy — ~100 redirects per created URL**. That single fact drives the design: the **redirect path is the critical path** and must be cache-first and independent of everything else. Writes are only ~400/sec at peak; reads are ~20–40K/sec.
+
+**I:** How do you generate the short code?
+
+**C:** Three options. Random string + collision check — simple but needs retries and a uniqueness index. Hashing the URL (e.g. SHA-256 → Base62 prefix) — deterministic but has collision risk and leaks that two users shortened the same URL. My default is a **monotonic counter encoded in Base62**: it's collision-free by construction and compact (`62^7 ≈ 3.5T` codes in 7 chars).
+
+**I:** Doesn't a sequential counter let people enumerate every link?
+
+**C:** Yes — that's the trade-off. If enumeration matters, I run the counter through a reversible permutation (e.g. Feistel/`multiply-by-coprime mod 62^n`) before Base62, so codes look random but stay unique and decodable. In a distributed setup I hand each node a **range/block** of counter values (or use a Snowflake-style id) to avoid a hot single sequence.
+
+**I:** Where does the redirect latency budget go?
+
+**C:** Almost entirely to a cache lookup. On redirect I do **cache-aside**: check Redis, on miss read the DB and backfill. With a 95%+ hit rate the DB barely sees read traffic. Popular links can also be cached at the **CDN/edge** so many redirects never reach the origin.
+
+**I:** What happens when a hot link's cache entry expires and 10K requests hit at once?
+
+**C:** Cache **stampede**. I mitigate with a short lock / single-flight so only one request rebuilds the entry, plus a small jittered TTL. For floods of *non-existent* codes (cache **penetration**) I cache negative results briefly and/or use a Bloom filter. For a single **hot key**, the CDN and local in-process cache absorb most of it.
+
+**I:** How do you store analytics without slowing redirects?
+
+**C:** Never write analytics inline. The redirect emits an event to a **queue**; a separate consumer aggregates counts into an analytics store. If the queue is down, redirects still succeed — analytics is best-effort.
+
+**I:** Expiration?
+
+**C:** A `expiresAt` field with a **TTL index** so Mongo reclaims expired docs, plus a check at read time returning **410 Gone** for expired (vs **404** for never-existed). The cache entry gets a matching TTL.
+
+**I:** Custom alias collisions?
+
+**C:** The short code has a **unique index**; on a duplicate alias the insert fails and I return **409 Conflict** — the DB, not app logic, is the source of truth for uniqueness.
+
+## All Solution Patterns
+
+| Concern | Options | Chosen here | Why |
+|---|---|---|---|
+| **Code generation** | Random+check · Hash(URL) · **Counter+Base62** | Counter + Base62 | Collision-free, compact, no retry loop |
+| **Enumeration defense** | Raw counter · **Permuted counter** · random | Permuted counter (optional) | Keeps uniqueness, hides volume/order |
+| **Distributed ids** | Single sequence · **Range blocks** · Snowflake | Range blocks / Snowflake | Avoids a global hot counter |
+| **Storage** | SQL · **Document (Mongo)** · KV | Mongo (KV-like access) | Simple `code→url` lookup + TTL index |
+| **Read path** | DB-only · **Cache-aside** · write-through | Cache-aside + CDN | Cheap, resilient, read-optimized |
+| **Redirect status** | **302 (default)** · 301 · 308 | 302 | Keeps control (analytics, edits); 301 for permanent |
+| **Analytics** | Inline write · **Async queue** | Async queue | Keeps redirect fast & decoupled |
+| **Expiration** | App check · **TTL index + app check** | Both | Reclaims storage *and* correct 410s |
+| **Uniqueness** | App check · **Unique index** | Unique index | Correct under concurrency |
+
 ## The Two Core Operations
 
 Everything reduces to two flows with very different traffic profiles — so we design them separately.
@@ -546,34 +622,114 @@ flowchart LR
 
 Don't introduce Kafka, multi-region DBs, local caching, and sharding until real traffic justifies them.
 
-## Suggested Node.js Project Structure (LLD)
+## Low-Level Design (LLD)
+
+The service is a layered NestJS application. The **write** path (create/manage) and the **read** path
+(redirect) are separate modules so they can scale — and even deploy — independently.
+
+```mermaid
+flowchart TD
+    R[Routes/Controllers] --> V[Zod validation]
+    V --> USVC[UrlService<br/>create/manage]
+    V --> RSVC[RedirectService<br/>resolve]
+    USVC --> IDG[Base62 id generator]
+    USVC --> REPO[(Mongo: Url model + TTL index)]
+    RSVC --> CACHE[(Redis cache-aside)]
+    CACHE --> REPO
+    RSVC -.emit.-> Q[[Analytics queue]]
+```
+
+### Service contracts
 
 ```text
-src/
-├── modules/
-│   ├── url/
-│   │   ├── url.controller.ts      # create / manage endpoints
-│   │   ├── url.service.ts         # validation, ID gen, persistence
-│   │   ├── url.routes.ts
-│   │   └── url.validation.ts
-│   ├── redirect/
-│   │   ├── redirect.controller.ts # GET /:shortCode
-│   │   └── redirect.service.ts    # cache-aside lookup
-│   └── analytics/
-│       └── analytics.consumer.ts  # async event processing
-├── models/
-│   └── url.model.ts               # schema + TTL index
-├── lib/
-│   ├── idGenerator.ts             # sequence / Snowflake
-│   ├── base62.ts                  # encode / decode
-│   └── cache.ts                   # Redis wrapper
-├── middleware/
-│   └── rateLimiter.ts
-└── app.ts
+UrlService.create(longUrl, { alias?, expiresAt?, ownerId? }) → { code, shortUrl }
+UrlService.disable(code, ownerId)                            → void        (404 if not owner)
+RedirectService.resolve(code)                                → longUrl     (404 unknown / 410 expired)
+Analytics.record(code, meta)                                 → fire-and-forget
+```
+
+### Create flow
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant Ctrl as UrlController
+    participant Z as Zod
+    participant S as UrlService
+    participant DB as MongoDB
+    C->>Ctrl: POST /api/urls { longUrl, alias? }
+    Ctrl->>Z: validate body
+    Z->>S: create(longUrl, alias?)
+    alt custom alias
+      S->>DB: insert { code: alias } (unique index)
+      DB-->>S: 11000 dup? → 409 Conflict
+    else generated code
+      S->>S: code = base62(nextId)
+      S->>DB: insert { code }
+    end
+    S-->>C: 201 { code, shortUrl }
+```
+
+### Redirect flow (the hot path)
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant Ctrl as RedirectController
+    participant R as RedirectService
+    participant Cache as Redis
+    participant DB as MongoDB
+    C->>Ctrl: GET /:code
+    Ctrl->>R: resolve(code)
+    R->>Cache: GET code
+    alt hit
+      Cache-->>R: longUrl
+    else miss
+      R->>DB: findOne({ code })
+      DB-->>R: doc | null
+      R->>Cache: SET code → longUrl (TTL)
+    end
+    R-->>C: 302 Location: longUrl  (or 404/410)
+    R--)Ctrl: emit analytics event (async)
+```
+
+### Suggested project structure
+
+```text
+server/src/
+├── app.module.ts
+├── common/            # base62, cache (Redis), zod pipe
+├── urls/              # url.schema (TTL index), url.service, url.controller, dto
+├── redirect/          # redirect.controller (GET /:code), redirect.service (cache-aside)
+└── counter/           # atomic counter for collision-free Base62 ids
 ```
 
 Keep the redirect service stateless so it scales horizontally behind a load balancer; scale on
 requests/sec, latency, and event-loop utilization.
+
+## Implementation
+
+A runnable full-stack implementation lives in [`./implementation/`](./implementation/):
+
+| Layer | Stack | Highlights |
+|---|---|---|
+| **`server/`** | NestJS + Mongoose + Zod + Redis (optional) | Counter→Base62 codes, unique index, TTL expiry, cache-aside redirect, custom aliases (409), 302 redirect, async analytics |
+| **`web/`** | Next.js + React + Redux Toolkit (RTK Query) | Shorten form + "my links" list; RTK Query mutation/query against the API |
+
+| Design element | Where in the code |
+|---|---|
+| Base62 counter codec | `server/src/common/base62.ts` |
+| Atomic id counter | `server/src/counter/counter.service.ts` |
+| Schema + TTL + unique index | `server/src/urls/url.schema.ts` |
+| Create + custom alias (409) | `server/src/urls/urls.service.ts` |
+| Cache-aside redirect (302/404/410) | `server/src/redirect/redirect.service.ts` |
+| Pluggable cache (Redis / in-memory) | `server/src/common/cache.ts` |
+| Zod validation | `server/src/common/zod-validation.pipe.ts` |
+| Shorten UI + links list | `web/src/components/*` + `web/src/store/urlsApi.ts` |
+
+The backend is verified by an end-to-end test (in-memory MongoDB) covering: create + Base62 code,
+redirect `302`, unknown → `404`, expired → `410`, duplicate alias → `409`, cache-hit path, and
+short-code uniqueness under repeated creates.
 
 ## What the Interviewer Is Really Testing
 
