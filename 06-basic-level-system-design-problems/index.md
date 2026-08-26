@@ -15,7 +15,7 @@ Focus: API design, Database modeling, and standard patterns.
 5. [Rate Limiter Middleware](./05-rate-limiter-middleware/05-rate-limiter-middleware.md)
 6. [Design a Comment System](./06-comment-system/06-comment-system.md)
 7. [Image Upload Service](./07-image-upload-service/07-image-upload-service.md) — includes a full [implementation](./07-image-upload-service/implementation/)
-8. [Design a Notification Feed](./08-notification-feed/08-notification-feed.md)
+8. [Design a Real-Time Notification System](./08-notification-feed/08-notification-feed.md) — includes a full [implementation](./08-notification-feed/implementation/)
 9. [Friend Request System](./09-friend-request-system/09-friend-request-system.md)
 10. [Implement a Caching Layer](./10-caching-layer/10-caching-layer.md)
 11. [Design a Shopping Cart](./11-shopping-cart/11-shopping-cart.md)
