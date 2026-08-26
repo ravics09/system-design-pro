@@ -68,9 +68,9 @@ flowchart TD
     style S fill:#cfe8ff,stroke:#2c6fbb
 ```
 
-Related concepts: [Load Balancer](../01-core-infrastructure-concepts/04-load-balancer.md),
-[Scalability](../01-core-infrastructure-concepts/01-scalability.md),
-[Cache](../02-data-and-storage-concepts/08-cache.md).
+Related concepts: [Load Balancer](../../01-core-infrastructure-concepts/04-load-balancer.md),
+[Scalability](../../01-core-infrastructure-concepts/01-scalability.md),
+[Cache](../../02-data-and-storage-concepts/08-cache.md).
 
 ## Modeling the Todo Resource
 
@@ -203,7 +203,7 @@ Notes worth raising in an interview:
 - **`userId` index** — the app *always* filters by owner, so this is the most important index.
 - **Compound index** `{ userId, isDeleted, createdAt }` matches the default list query exactly (equality
   fields first, sort field last — the ESR rule). See
-  [Index](../02-data-and-storage-concepts/05-index.md) and
+  [Index](../../02-data-and-storage-concepts/05-index.md) and
   [Database Indexing](./14-database-indexing.md).
 - **Sub-task `_id`** — keeping `_id: true` lets the API address a single sub-task for updates.
 
@@ -315,7 +315,7 @@ old soft-deleted rows later.
 ## Indexing Strategy
 
 Indexes are what keep the API fast as todos accumulate. See
-[Index](../02-data-and-storage-concepts/05-index.md).
+[Index](../../02-data-and-storage-concepts/05-index.md).
 
 - `{ userId: 1, isDeleted: 1, createdAt: -1 }` — the default "my active todos, newest first" list.
 - Add `status`/`priority`/`dueDate` to the compound index (or a secondary one) if those filters/sorts
@@ -332,7 +332,7 @@ Indexes are what keep the API fast as todos accumulate. See
   invalidating on write.
 - **Huge datasets?** Cursor pagination + right indexes keep queries constant-time regardless of depth.
 - **Very large userbase?** Shard by `userId` so each user's todos live together (see
-  [Sharding](../02-data-and-storage-concepts/06-sharding.md)).
+  [Sharding](../../02-data-and-storage-concepts/06-sharding.md)).
 
 ## Tips
 

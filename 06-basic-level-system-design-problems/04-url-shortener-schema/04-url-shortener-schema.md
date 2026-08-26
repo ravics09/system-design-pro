@@ -75,8 +75,8 @@ flowchart LR
 
 ## Back-of-the-Envelope Estimation
 
-Never design for average traffic — design for peak. Related: [Throughput](../01-core-infrastructure-concepts/06-throughput.md),
-[Latency](../01-core-infrastructure-concepts/05-latency.md).
+Never design for average traffic — design for peak. Related: [Throughput](../../01-core-infrastructure-concepts/06-throughput.md),
+[Latency](../../01-core-infrastructure-concepts/05-latency.md).
 
 **Writes (URL creation):**
 
@@ -107,8 +107,8 @@ almost every architectural decision (caching, CDN, stateless scaling).
 
 Separate the **URL (write) service** from the **redirect (read) service** so each scales on its own
 traffic profile. Keep both **stateless** so they scale horizontally
-([Horizontal Scaling](../01-core-infrastructure-concepts/03-horizontal-scaling.md),
-[Load Balancer](../01-core-infrastructure-concepts/04-load-balancer.md)).
+([Horizontal Scaling](../../01-core-infrastructure-concepts/03-horizontal-scaling.md),
+[Load Balancer](../../01-core-infrastructure-concepts/04-load-balancer.md)).
 
 ```mermaid
 flowchart TD
@@ -126,9 +126,9 @@ flowchart TD
     style RC fill:#cfe8ff,stroke:#2c6fbb
 ```
 
-Related infrastructure: [CDN](../01-core-infrastructure-concepts/07-cdn.md),
-[API Gateway](../01-core-infrastructure-concepts/09-api-gateway.md),
-[DNS](../01-core-infrastructure-concepts/08-dns.md).
+Related infrastructure: [CDN](../../01-core-infrastructure-concepts/07-cdn.md),
+[API Gateway](../../01-core-infrastructure-concepts/09-api-gateway.md),
+[DNS](../../01-core-infrastructure-concepts/08-dns.md).
 
 ## API Design
 
@@ -272,7 +272,7 @@ Two details worth calling out:
 
 - **`unique: true` on `shortCode` is a database concern**, not just validation. The unique index is what
   guarantees correctness under concurrency (see the alias race condition below). Related:
-  [Index](../02-data-and-storage-concepts/05-index.md).
+  [Index](../../02-data-and-storage-concepts/05-index.md).
 - **TTL index vs application check.** A TTL index physically reclaims storage, but MongoDB's TTL sweeper
   runs periodically (roughly once a minute), so a URL can be *slightly* past `expiresAt` yet still
   present. Therefore the redirect service should **also** check `expiresAt` at read time and return
@@ -304,8 +304,8 @@ broader requirements.
 
 | Choose… | When you need… |
 |---|---|
-| **SQL / Postgres** ([SQL DB](../02-data-and-storage-concepts/02-sql-database.md)) | Relational data, transactions, user ownership, admin queries |
-| **NoSQL / DynamoDB / Cassandra** ([NoSQL DB](../02-data-and-storage-concepts/03-nosql-database.md)) | Massive global scale, pure key-value access (`PK = shortCode`) |
+| **SQL / Postgres** ([SQL DB](../../02-data-and-storage-concepts/02-sql-database.md)) | Relational data, transactions, user ownership, admin queries |
+| **NoSQL / DynamoDB / Cassandra** ([NoSQL DB](../../02-data-and-storage-concepts/03-nosql-database.md)) | Massive global scale, pure key-value access (`PK = shortCode`) |
 
 A pragmatic answer: start with a familiar store (Postgres/MongoDB) + Redis, but keep the mapping behind
 a repository abstraction so you can move to DynamoDB/Cassandra if scale demands it. On AWS at very large
@@ -327,8 +327,8 @@ flowchart TD
 ```
 
 Application logic on a cache miss uses **cache-aside**
-([Cache-Aside](../02-data-and-storage-concepts/09-cache-aside.md),
-[Cache](../02-data-and-storage-concepts/08-cache.md)):
+([Cache-Aside](../../02-data-and-storage-concepts/09-cache-aside.md),
+[Cache](../../02-data-and-storage-concepts/08-cache.md)):
 
 ```text
 GET shortCode from Redis
@@ -382,7 +382,7 @@ Mitigations:
 Attackers request random non-existent codes; every one misses the cache and hits the DB.
 
 - **Negative caching** — cache `code → NOT_FOUND` with a short TTL.
-- **[Bloom filter](../05-reliability-performance-and-modern-concepts/04-bloom-filter.md)** — cheaply
+- **[Bloom filter](../../05-reliability-performance-and-modern-concepts/04-bloom-filter.md)** — cheaply
   answers "definitely doesn't exist" and returns `404` before touching the DB.
 
 ### Hot Key
@@ -399,7 +399,7 @@ flowchart TD
 
 - **CDN** absorbs most traffic at the edge.
 - **Local in-memory LRU** on each app instance for the very hottest codes.
-- **Redis replicas** ([Replication](../02-data-and-storage-concepts/07-replication.md)) spread reads.
+- **Redis replicas** ([Replication](../../02-data-and-storage-concepts/07-replication.md)) spread reads.
 
 > A pure local cache isn't enough on its own — each instance has its own copy with no shared
 > consistency. Redis stays the shared L2; local memory is an L1 optimization for hot keys.
@@ -442,9 +442,9 @@ Emit an event and move on:
 { "shortCode": "aB92xK", "ts": "2026-08-26T10:00:00Z", "country": "IN", "referrer": "google.com" }
 ```
 
-Use a [message queue](../04-messaging-and-communication-concepts/01-message-queue.md) /
-[pub-sub](../04-messaging-and-communication-concepts/02-pub-sub.md) stream (Kafka/Kinesis/SQS), and a
-[dead-letter queue](../04-messaging-and-communication-concepts/03-dead-letter-queue.md) for poison
+Use a [message queue](../../04-messaging-and-communication-concepts/01-message-queue.md) /
+[pub-sub](../../04-messaging-and-communication-concepts/02-pub-sub.md) stream (Kafka/Kinesis/SQS), and a
+[dead-letter queue](../../04-messaging-and-communication-concepts/03-dead-letter-queue.md) for poison
 events. For storage, use an analytics-friendly store (ClickHouse / BigQuery / Redshift), **not** the
 transactional URL DB.
 
@@ -453,7 +453,7 @@ eventually-consistent subsystem — buffer, retry, or accept minor loss, but nev
 
 ## Rate Limiting and Abuse
 
-Apply [rate limiting](../05-reliability-performance-and-modern-concepts/02-rate-limiting.md) at multiple
+Apply [rate limiting](../../05-reliability-performance-and-modern-concepts/02-rate-limiting.md) at multiple
 layers (CDN/WAF → API Gateway → app). Key strategies:
 
 ```text
@@ -495,22 +495,22 @@ Expired / disabled URL    → 410 Gone
 ## Idempotency and Duplicate URLs
 
 - **Retried create requests** (network retries) can mint duplicate codes. If that's undesirable, accept
-  an [`Idempotency-Key`](../03-distributed-systems-concepts/08-idempotency-key.md) header and return the
-  stored result on replay ([Idempotency](../03-distributed-systems-concepts/07-idempotency.md)).
+  an [`Idempotency-Key`](../../03-distributed-systems-concepts/08-idempotency-key.md) header and return the
+  stored result on replay ([Idempotency](../../03-distributed-systems-concepts/07-idempotency.md)).
 - **Same long URL → same short URL?** A product decision. Generating a *new* code per request is simpler
   and supports independent ownership/analytics; deduplication saves storage but complicates ownership,
   expiry, and permissions. Default to unique-per-creation unless dedup is explicitly required.
 
 ## Scaling and Failure Scenarios
 
-- **Database scaling** — start with a primary + [read replicas](../02-data-and-storage-concepts/07-replication.md);
-  Redis absorbs most reads anyway. Grow via [sharding](../02-data-and-storage-concepts/06-sharding.md) /
-  [partitioning](../02-data-and-storage-concepts/14-data-partitioning.md) using
-  `hash(shortCode)` ([consistent hashing](../02-data-and-storage-concepts/12-consistent-hashing.md)) to
+- **Database scaling** — start with a primary + [read replicas](../../02-data-and-storage-concepts/07-replication.md);
+  Redis absorbs most reads anyway. Grow via [sharding](../../02-data-and-storage-concepts/06-sharding.md) /
+  [partitioning](../../02-data-and-storage-concepts/14-data-partitioning.md) using
+  `hash(shortCode)` ([consistent hashing](../../02-data-and-storage-concepts/12-consistent-hashing.md)) to
   avoid hotspots — don't shard on a sequential numeric ID.
 - **Redis down** — degrade to the DB, but protect it with
-  [circuit breakers](../05-reliability-performance-and-modern-concepts/01-circuit-breaker.md), connection
-  limits, and [load shedding](../05-reliability-performance-and-modern-concepts/03-load-shedding.md);
+  [circuit breakers](../../05-reliability-performance-and-modern-concepts/01-circuit-breaker.md), connection
+  limits, and [load shedding](../../05-reliability-performance-and-modern-concepts/03-load-shedding.md);
   lean on CDN/edge caching. Run Redis clustered/replicated.
 - **Database down** — redirects cached in Redis/CDN still succeed; misses fail. Use Multi-AZ,
   replication, automatic failover, and backups.
