@@ -8,7 +8,7 @@ Each problem below links to its own file. This list is for practice and referenc
 
 Focus: API design, Database modeling, and standard patterns.
 
-1. [Design a User Authentication System](./01-user-authentication-system.md)
+1. [Design a User Authentication System](./01-user-authentication-system/01-user-authentication-system.md) — includes a full [implementation](./01-user-authentication-system/implementation/)
 2. [Design a "Todo" List API](./02-todo-list-api.md)
 3. [Implement Pagination](./03-cursor-based-pagination.md)
 4. [Design a URL Shortener (Schema)](./04-url-shortener-schema.md)
