@@ -1,0 +1,36 @@
+{
+  "name": "image-upload-service",
+  "version": "1.0.0",
+  "description": "Reference implementation of an image upload service using pre-signed S3 URLs, a Node.js/TypeScript backend, async image processing, and CDN delivery.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/server.js",
+    "start:worker": "node dist/workers/imageProcessor.js",
+    "dev": "tsx watch src/server.ts",
+    "dev:worker": "tsx watch src/workers/imageProcessor.ts",
+    "lint": "eslint \"src/**/*.ts\""
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.632.0",
+    "@aws-sdk/client-sqs": "^3.632.0",
+    "@aws-sdk/cloudfront-signer": "^3.621.0",
+    "@aws-sdk/s3-request-presigner": "^3.632.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "ioredis": "^5.4.1",
+    "mongoose": "^8.5.2",
+    "sharp": "^0.33.4",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.14.15",
+    "tsx": "^4.17.0",
+    "typescript": "^5.5.4"
+  }
+}
