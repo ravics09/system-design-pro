@@ -652,6 +652,162 @@ three or four branches — follow the ones they push on):
 13. TRADE-OFF      Why this design?
 ```
 
+## Interview Questions & Answers
+
+A structured question bank for this problem — the kind of questions an interviewer asks (and that you
+should ask *them*), grouped by theme, each with a short answer.
+
+### A. Requirement Clarification
+
+- **What authentication methods must the system support?** — Clarify before designing; scope drives everything.
+- **Are we supporting email/password only?** — Assume yes for the baseline; social/SSO can be layered later.
+- **Do we need Google/GitHub/social login?** — If yes, delegate identity via OAuth 2.0 / OIDC instead of building it.
+- **Do we need MFA?** — If yes, add it as a second factor *after* password verification, not a separate architecture.
+- **Do we need email verification?** — Store `isEmailVerified`; gate sensitive actions until verified.
+- **Do we need password reset?** — Yes in production: time-limited, single-use, hashed reset tokens sent out-of-band.
+- **Do we need multiple devices/sessions?** — If yes, model sessions server-side so each device is independently revocable.
+- **What does logout mean here?** — Define it explicitly: revoke the refresh token/session; access token expires shortly after.
+- **Do we need role-based authorization?** — If yes, store a `role`/permissions and enforce with authorization middleware.
+- **Monolith or microservices?** — Monolith → HS256 is fine; microservices → prefer RS256 + a shared verification story.
+- **What scale are we expecting?** — Drives stateless design, Redis usage, and DB scaling decisions.
+
+### B. HLD / Architecture
+
+- **Draw the high-level architecture.** — Client → API Gateway/LB → stateless Node instances → Redis (sessions/revocation/rate limit) + MongoDB (users).
+- **Where does authentication happen?** — At the edge (gateway) and/or via middleware on each service; token issuance is centralized.
+- **Would you create a separate Auth Service?** — Yes once multiple apps/services share identity; keep issuance and key management in one place.
+- **Where does the API Gateway fit?** — Single entry point that can centralize JWT validation, routing, and rate limiting.
+- **How do multiple Node instances authenticate users?** — They validate the signed JWT locally; no sticky sessions needed.
+- **Stateful or stateless?** — Access-token validation is stateless; refresh/session lifecycle is stateful (Redis/DB).
+- **How would you scale the auth service horizontally?** — Keep it stateless, put shared state in Redis/MongoDB, run behind a load balancer.
+- **What if the Auth Service goes down?** — Existing access tokens keep working until expiry; new logins/refreshes fail — degrade gracefully.
+- **What if Redis goes down?** — Refresh/revocation/rate limiting degrade; decide fail-open vs fail-closed per endpoint.
+- **What if MongoDB goes down?** — Login/registration fail, but stateless access-token validation still works.
+
+### C. User / Database Design
+
+- **Design the User schema.** — `email`, `passwordHash`, `firstName`, `lastName`, `role`, `isActive`, `isEmailVerified`, timestamps.
+- **What fields would you store?** — Identity, credentials (hash only), profile, role/status flags, audit timestamps.
+- **How would you store passwords?** — As an Argon2id/bcrypt hash, never plaintext or reversible encryption.
+- **Would you store the password itself?** — Never — only its hash.
+- **What indexes would you create?** — A unique index on `email` (lowercased); others based on query patterns.
+- **How would you enforce unique emails?** — A MongoDB unique index, plus handling the duplicate-key error in the app.
+- **Would `passwordHash` be returned in normal queries?** — No — `select: false`, opt in only during login.
+- **Would you create a separate Session collection?** — Yes, to manage refresh tokens/devices and enable revocation.
+- **What would you store in a session?** — `userId`, `tokenHash`, `deviceId`, `userAgent`, `ipAddress`, `expiresAt`, `revokedAt`.
+- **Refresh tokens in MongoDB or Redis?** — Either; Redis for speed/TTL, MongoDB for richer querying/audit — often both.
+- **How would you clean up expired sessions?** — TTL indexes (Mongo) or native key expiry (Redis).
+
+### D. Password Security
+
+- **How would you hash passwords?** — Argon2id (preferred) or bcrypt, with sensible cost parameters.
+- **Why bcrypt/Argon2 instead of SHA-256?** — They're deliberately slow and salted, making brute force expensive.
+- **How would you verify a password?** — Recompute/compare against the stored hash using the library's verify function.
+- **How would you handle a compromised password database?** — Hashes buy time; force resets, bump token version, notify users.
+- **How would you prevent brute-force login attacks?** — Rate limiting, exponential backoff, and account lockout/throttling.
+- **How would you prevent credential stuffing?** — Rate limiting, bot detection, breached-password checks, MFA.
+- **Different errors for “no user” vs “wrong password”?** — No — return a single generic error to prevent account enumeration.
+
+### E. JWT
+
+- **Why use JWT?** — Stateless, locally verifiable tokens that scale across many instances/services.
+- **What goes inside the JWT?** — Minimal claims: `sub`, `role`, `iat`, `exp`, `iss`, `aud`.
+- **What would you not put inside?** — Passwords, PII, card data, or large/sensitive payloads.
+- **Signing vs encryption?** — Signing guarantees integrity (payload is readable); encryption hides the payload. A normal JWT is signed.
+- **How would you validate a JWT?** — Verify signature with a pinned algorithm, then check `exp`, `iss`, and `aud`.
+- **How would you handle token expiration?** — Short access-token TTL; client refreshes via the refresh token.
+- **What is an access token?** — A short-lived token used to authorize normal API requests.
+- **What is a refresh token?** — A long-lived, revocable token used only to obtain new access tokens.
+- **Why not a 30-day access token?** — A stolen token would be usable for 30 days; short TTL shrinks the damage window.
+- **How long for the access token?** — Typically 5–15 minutes.
+- **How long for the refresh token?** — Days to weeks, depending on product and risk.
+- **HS256 vs RS256?** — HS256 for a single app; RS256 for microservices so verifiers only need the public key.
+- **How would you rotate signing keys?** — Publish keys via JWKS with key IDs (`kid`); overlap old/new during rotation.
+- **How do other microservices verify JWTs?** — Fetch/cache public keys from the JWKS endpoint and verify locally.
+
+### F. JWT Middleware / LLD
+
+- **How would you implement the authentication middleware?** — Extract Bearer token, verify signature/claims, attach `req.user`, call `next()`.
+- **Where is the middleware applied?** — On protected routes (and/or centrally at the gateway).
+- **How would you extract the Bearer token?** — From the `Authorization: Bearer <token>` header.
+- **What if the token is missing?** — Return `401 Authentication required`.
+- **What if the token is expired?** — Return `401`; client should refresh.
+- **What if the signature is invalid?** — Return `401`; never trust the token's self-declared algorithm.
+- **Where do you put the authenticated user?** — On the request object, e.g. `req.user`.
+- **How would you implement authorization middleware?** — A separate `authorize(...roles)` that checks `req.user.role`/permissions.
+- **How do you differentiate 401 and 403?** — 401 = not authenticated; 403 = authenticated but not permitted.
+
+### G. Refresh Token
+
+- **How does the refresh flow work?** — Client sends refresh token → server validates session → issues a new access token (and rotates refresh).
+- **Where would you store refresh tokens?** — Server-side session store (Redis/MongoDB); on browsers, in an HttpOnly cookie.
+- **Would you store them in plaintext?** — No — store a hash so a DB leak doesn't expose usable tokens.
+- **What is refresh-token rotation?** — Issue a new refresh token on each use and invalidate the previous one.
+- **How would you detect reuse?** — If an already-rotated token is presented, flag replay and revoke the session family.
+- **How would you revoke a refresh token?** — Mark the session `revokedAt` / delete the Redis key.
+- **How would you logout from one device?** — Revoke that device's session only.
+- **How would you logout from all devices?** — Revoke all sessions for the user or bump the user's token version.
+
+### H. Logout / Revocation
+
+- **JWTs are stateless — how does logout work?** — Revoke the refresh token/session; the short-lived access token expires soon after.
+- **Can you immediately invalidate an access token?** — Not with pure stateless JWT; you need a revocation check.
+- **Would you use a JWT blacklist?** — Only when immediate revocation is required, accepting the extra lookup.
+- **Would you use Redis for revocation?** — Yes — a fast, TTL-bounded store for blacklists/token versions.
+- **Trade-offs of blacklisting?** — Adds a stateful lookup to every request, partly undoing statelessness.
+- **Invalidate all tokens after a password change?** — Bump a per-user `tokenVersion` embedded in the JWT.
+
+### I. Browser / Client Security
+
+- **Where would you store the access token?** — In memory (not persistent storage) for browser apps.
+- **Where would you store the refresh token?** — In a Secure, HttpOnly cookie for browsers.
+- **Cookies vs localStorage?** — Prefer HttpOnly cookies for sensitive tokens; localStorage is exposed to XSS.
+- **What are HttpOnly cookies?** — Cookies JavaScript can't read, mitigating token theft via XSS.
+- **What is the Secure flag?** — Sends the cookie only over HTTPS.
+- **What is SameSite?** — Controls cross-site cookie sending; helps mitigate CSRF.
+- **How would you protect against XSS?** — Output encoding, CSP, input sanitization, and keeping tokens out of JS-readable storage.
+- **How would you protect against CSRF?** — SameSite cookies plus anti-CSRF tokens for cookie-based auth.
+- **Would web and mobile differ?** — Yes — mobile typically uses secure device storage and Bearer headers instead of cookies.
+
+### J. Scalability
+
+- **How would you handle millions of users?** — Stateless nodes, indexed MongoDB (sharded if needed), Redis for hot state.
+- **Thousands of logins per second?** — Scale nodes horizontally; rate-limit; tune hashing cost; scale the DB.
+- **JWT validation without hitting MongoDB?** — Yes — signature/claim verification is local and needs no DB.
+- **Why is stateless validation useful?** — No per-request DB/session lookup, so it scales cheaply across instances.
+- **Where does Redis help?** — Sessions, revocation, rate limiting, caching, OTP/reset workflows.
+- **How would you rate-limit logins?** — Redis counters keyed on IP+endpoint (and IP+email with safeguards).
+- **Thousands of simultaneous refreshes?** — Keep refresh cheap, cache verification keys, scale Redis/nodes.
+- **How would you scale MongoDB?** — Indexing, replica sets for reads, sharding for writes/data volume.
+- **How would you scale Redis?** — Clustering/replication and appropriate eviction/TTL policies.
+
+### K. Failure Scenarios
+
+- **Redis unavailable?** — Refresh/revocation/rate limiting degrade; choose fail-open vs fail-closed deliberately.
+- **MongoDB unavailable?** — Login/registration fail; existing access tokens still validate statelessly.
+- **Signing-key service unavailable?** — Cache keys/JWKS so verification survives short outages; issuance may pause.
+- **Refresh request times out?** — Client retries; make refresh idempotent to avoid duplicate rotations.
+- **Client retries the refresh?** — Handle idempotently so a retried valid request isn't treated as replay.
+- **Refresh token stolen?** — Rotation + reuse detection revokes the session family; scope cookies tightly.
+- **Access token stolen?** — Limited blast radius due to short TTL; revoke the session and rotate keys if widespread.
+- **Attacker gets the password database?** — Slow hashes delay cracking; force resets, bump token versions, notify users.
+
+### L. Advanced / Lead-level
+
+- **How would you implement MFA?** — Add a second factor (TOTP/SMS/passkey) after password verification, tracked per session.
+- **How would you implement OAuth 2.0?** — Delegate to an identity provider; exchange auth codes for tokens via OIDC.
+- **Authentication vs authorization?** — Authentication = who you are (401); authorization = what you may do (403).
+- **RBAC vs ABAC?** — RBAC grants by role; ABAC evaluates attributes/policies for finer-grained control.
+- **How would you implement permissions?** — Map roles to permissions and check them in authorization middleware/policies.
+- **API Gateway for JWT validation?** — Yes — centralize common validation at the edge, keep authz in services.
+- **Should every microservice validate JWT?** — Yes for defense in depth, even if the gateway also validates.
+- **How would you distribute public keys?** — Via a JWKS endpoint with `kid`-based key selection.
+- **How would you implement audit logging?** — Record auth events (login, refresh, logout, failures) with metadata for forensics.
+- **What auth metrics would you monitor?** — Login success/failure rates, refresh volume, token errors, rate-limit hits, latency.
+- **How would you detect suspicious logins?** — Anomalies in IP/geo/device/velocity; trigger MFA or block.
+- **Migrating sessions → JWT?** — Run both in parallel, issue JWTs on new logins, and phase out sessions gradually.
+- **What trade-offs did you make?** — State the central one: stateless scalability vs immediate revocation, and how you balanced it.
+
 ---
 
 _Notes: (add your own content here)_
