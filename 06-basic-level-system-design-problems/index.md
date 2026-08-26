@@ -14,7 +14,7 @@ Focus: API design, Database modeling, and standard patterns.
 4. [Design a URL Shortener (Schema)](./04-url-shortener-schema.md)
 5. [Rate Limiter Middleware](./05-rate-limiter-middleware.md)
 6. [Design a Comment System](./06-comment-system.md)
-7. [Image Upload Service](./07-image-upload-service.md)
+7. [Image Upload Service](./07-image-upload-service/07-image-upload-service.md) — includes a full [implementation](./07-image-upload-service/implementation/)
 8. [Design a Notification Feed](./08-notification-feed.md)
 9. [Friend Request System](./09-friend-request-system.md)
 10. [Implement a Caching Layer](./10-caching-layer.md)

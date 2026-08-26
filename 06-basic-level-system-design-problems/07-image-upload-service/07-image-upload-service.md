@@ -73,7 +73,7 @@ This is the classic anti-pattern. Every byte hits your server, consuming:
 
 **Better: let the client upload directly to S3**, and use the server only to *authorize* the upload by
 issuing a **pre-signed URL**. Your server stays stateless and lightweight; S3 handles the bytes and the
-durability. Related: [Object Storage](../02-data-and-storage-concepts/13-object-storage.md).
+durability. Related: [Object Storage](../../02-data-and-storage-concepts/13-object-storage.md).
 
 ## What Is a Pre-Signed URL?
 
@@ -116,8 +116,8 @@ flowchart TD
 ```
 
 The upload service stays **stateless** and horizontally scalable
-([Horizontal Scaling](../01-core-infrastructure-concepts/03-horizontal-scaling.md),
-[Load Balancer](../01-core-infrastructure-concepts/04-load-balancer.md)); bytes never flow through it.
+([Horizontal Scaling](../../01-core-infrastructure-concepts/03-horizontal-scaling.md),
+[Load Balancer](../../01-core-infrastructure-concepts/04-load-balancer.md)); bytes never flow through it.
 
 ## The Upload Flow (Three Steps)
 
@@ -216,7 +216,7 @@ export async function createUploadUrl(userId: string, contentType: string, size:
 ## Metadata Schema
 
 The bytes live in S3; the **metadata** lives in a database and is the source of truth for *what exists
-and its lifecycle*. Related: [Database](../02-data-and-storage-concepts/01-database.md).
+and its lifecycle*. Related: [Database](../../02-data-and-storage-concepts/01-database.md).
 
 ```mermaid
 flowchart LR
@@ -308,11 +308,11 @@ flowchart LR
     Q -.poison msg.-> DLQ[[Dead Letter Queue]]
 ```
 
-- Use a [message queue](../04-messaging-and-communication-concepts/01-message-queue.md) (SQS/Kafka) so
-  spikes don't overwhelm workers; apply [backpressure](../04-messaging-and-communication-concepts/04-backpressure.md).
+- Use a [message queue](../../04-messaging-and-communication-concepts/01-message-queue.md) (SQS/Kafka) so
+  spikes don't overwhelm workers; apply [backpressure](../../04-messaging-and-communication-concepts/04-backpressure.md).
 - Send repeatedly-failing jobs to a
-  [dead-letter queue](../04-messaging-and-communication-concepts/03-dead-letter-queue.md).
-- Make processing **idempotent** ([Idempotency](../03-distributed-systems-concepts/07-idempotency.md)) —
+  [dead-letter queue](../../04-messaging-and-communication-concepts/03-dead-letter-queue.md).
+- Make processing **idempotent** ([Idempotency](../../03-distributed-systems-concepts/07-idempotency.md)) —
   the same S3 event may be delivered more than once, so re-processing must be safe (overwrite the same
   derived keys).
 - Workers use `sharp`/libvips (or Lambda) to resize, strip EXIF, and transcode. On success, flip status
@@ -332,8 +332,8 @@ flowchart LR
     CDN -->|cache hit| V
 ```
 
-- Put a **[CDN](../01-core-infrastructure-concepts/07-cdn.md)** in front of S3 so images are cached at
-  the edge, cutting [latency](../01-core-infrastructure-concepts/05-latency.md) and origin load.
+- Put a **[CDN](../../01-core-infrastructure-concepts/07-cdn.md)** in front of S3 so images are cached at
+  the edge, cutting [latency](../../01-core-infrastructure-concepts/05-latency.md) and origin load.
 - For **public** images, serve via the CDN with long cache TTLs and content-hashed keys for cache-busting.
 - For **private** images, serve via **signed CDN URLs / signed cookies** (short-lived), so only
   authorized viewers get access while still benefiting from edge caching.
@@ -346,7 +346,7 @@ flowchart LR
 - **Scope the key** — namespace by `userId` and authorize that the caller owns the resource on every op.
 - **Enforce type & size at S3** — via the POST policy, not just app-side hints.
 - **Strip EXIF/metadata** during processing to avoid leaking GPS/PII.
-- **[Rate limit](../05-reliability-performance-and-modern-concepts/02-rate-limiting.md)** URL issuance to
+- **[Rate limit](../../05-reliability-performance-and-modern-concepts/02-rate-limiting.md)** URL issuance to
   curb abuse (Redis counters, keyed by user/IP).
 - **Content moderation / virus scanning** — for user-generated content, run async scanning (e.g.
   Rekognition / ClamAV) before marking `READY`; quarantine on failure.
@@ -358,7 +358,7 @@ flowchart LR
   worth naming.
 - **Deduplication** — compute a content hash (checksum) and, if it already exists, point the new
   metadata row at the existing object instead of storing duplicate bytes. Decide ownership semantics.
-- **Idempotent create** — an [`Idempotency-Key`](../03-distributed-systems-concepts/08-idempotency-key.md)
+- **Idempotent create** — an [`Idempotency-Key`](../../03-distributed-systems-concepts/08-idempotency-key.md)
   on `POST /uploads` prevents duplicate records when a client retries after a network blip.
 
 ## Failure Scenarios
