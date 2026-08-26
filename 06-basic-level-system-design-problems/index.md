@@ -18,7 +18,7 @@ Focus: API design, Database modeling, and standard patterns.
 8. [Design a Real-Time Notification System](./08-notification-feed/08-notification-feed.md) — includes a full [implementation](./08-notification-feed/implementation/)
 9. [Friend Request System](./09-friend-request-system/09-friend-request-system.md)
 10. [Implement a Caching Layer](./10-caching-layer/10-caching-layer.md)
-11. [Design a Shopping Cart](./11-shopping-cart/11-shopping-cart.md)
+11. [Design a Shopping Cart System](./11-shopping-cart/11-shopping-cart.md) — includes a full [implementation](./11-shopping-cart/implementation/)
 12. [API Response Standardization](./12-api-response-standardization/12-api-response-standardization.md)
 13. [Simple Job Queue](./13-simple-job-queue/13-simple-job-queue.md)
 14. [Database Indexing](./14-database-indexing/14-database-indexing.md)
