@@ -68,8 +68,8 @@ Rather than memorizing dozens of concepts, drive the design with four questions:
 
 The key architectural decision: keep the Node.js application **stateless** wherever possible, so
 instances can be added or removed without caring which one receives a request (see
-[Scalability](../01-core-infrastructure-concepts/01-scalability.md) and
-[Horizontal Scaling](../01-core-infrastructure-concepts/03-horizontal-scaling.md)). Shared state lives
+[Scalability](../../01-core-infrastructure-concepts/01-scalability.md) and
+[Horizontal Scaling](../../01-core-infrastructure-concepts/03-horizontal-scaling.md)). Shared state lives
 in purpose-built stores — MongoDB for users, Redis for sessions/revocation/rate limiting.
 
 ```mermaid
@@ -89,8 +89,8 @@ flowchart TD
     style A3 fill:#cfe8ff,stroke:#2c6fbb
 ```
 
-Related infrastructure concepts: [Load Balancer](../01-core-infrastructure-concepts/04-load-balancer.md),
-[API Gateway](../01-core-infrastructure-concepts/09-api-gateway.md).
+Related infrastructure concepts: [Load Balancer](../../01-core-infrastructure-concepts/04-load-balancer.md),
+[API Gateway](../../01-core-infrastructure-concepts/09-api-gateway.md).
 
 ## User Registration Flow
 
@@ -415,11 +415,11 @@ password changes, "log out all devices," and security incidents.
 ## Where Does Redis Fit?
 
 A common mistake: *"Since we use JWT, every JWT goes into Redis."* That defeats the point of stateless
-validation. Instead, use [Redis / cache](../02-data-and-storage-concepts/08-cache.md) for:
+validation. Instead, use [Redis / cache](../../02-data-and-storage-concepts/08-cache.md) for:
 
 - Refresh-token / session state
 - Revocation lists (blacklist / version)
-- [Rate limiting](../05-reliability-performance-and-modern-concepts/02-rate-limiting.md) counters
+- [Rate limiting](../../05-reliability-performance-and-modern-concepts/02-rate-limiting.md) counters
 - Caching and temporary auth workflows (OTP, reset tokens)
 
 The access token itself should normally be validated **locally**, with no network hop.
@@ -434,7 +434,7 @@ Key strategies:  IP + endpoint        (blunt, protects the endpoint)
                  IP + email           (targeted, with safeguards against lockout abuse)
 ```
 
-See [Rate Limiting](../05-reliability-performance-and-modern-concepts/02-rate-limiting.md) for the token
+See [Rate Limiting](../../05-reliability-performance-and-modern-concepts/02-rate-limiting.md) for the token
 bucket algorithm. Exact thresholds depend on the product.
 
 ## Security Doesn't Stop at JWT
