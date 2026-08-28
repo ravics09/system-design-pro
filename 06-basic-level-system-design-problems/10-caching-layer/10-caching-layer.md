@@ -355,6 +355,189 @@ server/src/
 - **Degrade gracefully** — cache down ⇒ fall through to origin behind a circuit breaker; the cache is
   never the source of truth.
 
+## Distributed Caching (Deep Dive)
+
+A **local (in-process) cache** is the fastest possible hit, but it's private to one process: every app
+instance has its own copy, they drift out of sync, and none survive a restart. A **distributed cache**
+(Redis, Memcached) is a **separate tier shared by all instances** — one source of cached truth, reachable
+over the network.
+
+| | Local cache (L1) | Distributed cache (L2) |
+|---|---|---|
+| Location | In-process memory | Separate Redis/Memcached tier |
+| Speed | ~ns–µs (no network) | ~sub-ms (one network hop) |
+| Shared across instances | ❌ each instance differs | ✅ one shared view |
+| Survives app restart | ❌ | ✅ (and RDB/AOF survives cache restart) |
+| Capacity | Bounded by the process | Scales across many cache nodes |
+| Coherence problem | High (N copies) | Lower (one copy) |
+
+### Topology: sharding + replication
+
+A distributed cache scales by **sharding** (partition keys across nodes) and stays available via
+**replication** (each shard has replicas that can be promoted on failure).
+
+```mermaid
+flowchart TD
+    A1[App 1] --> R{Router / client<br/>hash the key}
+    A2[App 2] --> R
+    A3[App N] --> R
+    R -->|slot 0–5460| S1[(Shard A<br/>primary)]
+    R -->|slot 5461–10922| S2[(Shard B<br/>primary)]
+    R -->|slot 10923–16383| S3[(Shard C<br/>primary)]
+    S1 -. replicate .-> S1r[(A replica)]
+    S2 -. replicate .-> S2r[(B replica)]
+    S3 -. replicate .-> S3r[(C replica)]
+```
+
+- **Sharding** — decide which node owns a key. **Consistent hashing** (or **Redis Cluster's 16,384 hash
+  slots**) means adding/removing a node remaps only a *slice* of keys, not all of them. See
+  [Consistent Hashing](../../02-data-and-storage-concepts/12-consistent-hashing.md),
+  [Data Partitioning](../../02-data-and-storage-concepts/14-data-partitioning.md).
+- **Replication** — each shard's **primary** asynchronously replicates to **replicas**; on primary
+  failure a replica is **promoted** (Redis Sentinel or Cluster) so the shard stays available.
+- **Persistence** — Redis can snapshot to disk (**RDB**) and/or append every write (**AOF**), so a
+  restarted node **reloads its data** instead of coming back empty (see the cold-cache scenario below).
+
+### Multi-tier (L1 + L2) and the coherence problem
+
+The fastest design combines both: a small **L1 in each app instance** in front of the shared **L2**.
+The catch is **coherence** — when data changes, the *other* instances' L1 copies are now stale. Fix it by
+**broadcasting invalidations** (Redis **pub/sub** or client-side caching / RESP3 "tracking"): on a write,
+publish `invalidate key`; every instance drops that key from its L1.
+
+```mermaid
+flowchart LR
+    W[Instance A writes key] --> DB[(Origin)]
+    W --> L2[(Redis L2: set/del key)]
+    W --> PS[(Redis Pub/Sub: 'invalidate key')]
+    PS --> B[Instance B drops key from L1]
+    PS --> C[Instance C drops key from L1]
+```
+
+### Consistency in a distributed cache
+
+- **Eventual by default** — replication is async, so a replica can briefly lag the primary.
+- **Read-your-write** — read from the primary (or write-through + read the same node) when you need it.
+- **Invalidation, not stale forever** — pair TTLs with explicit invalidation so drift self-heals.
+- **Single source of truth is the DB** — the cache (even distributed) is derived data; never the only copy.
+
+## Real-Time Redis Scenarios: Expiry, Failure & Re-Sync
+
+> "What happens when the cache **isn't there** — a hot key expires, or Redis falls over — and **10,000
+> requests** arrive at once?" The cache is an optimization; when it's absent or stale, that load falls
+> through to the origin. Here are the three canonical incidents and how the system survives and
+> re-syncs.
+
+### The math (why this is scary)
+
+```text
+Steady state:  10,000 req/s · 95% hit  →  ~500 req/s reach the DB   (fine)
+Cache gone:    10,000 req/s · 0% hit   →  10,000 req/s hit the DB   (≈20× → DB melts)
+```
+
+The danger isn't losing the cache — it's the **sudden 20× load spike** on a DB sized for the cached path.
+
+### Scenario A — Hot key expires (cache stampede / thundering herd)
+
+One very popular key's TTL lapses. Between expiry and the first repopulation, **every** concurrent
+request misses and independently hits the DB for the *same* key.
+
+```mermaid
+sequenceDiagram
+    participant Clients as 10k requests
+    participant Cache as Redis
+    participant DB as Origin DB
+    Clients->>Cache: GET hotkey  (all MISS — just expired)
+    Clients->>DB: 10,000 identical loads  💥
+    DB-->>Clients: value (after overload)
+    Clients->>Cache: 10,000 redundant SETs
+```
+
+**Defenses:**
+- **Single-flight / mutex lock** — the *first* miss acquires a lock and loads; the other 9,999 **await
+  the same result** (or briefly serve stale). Result: **1** DB query, not 10,000. (This is exactly what
+  `getOrLoad` does in the implementation.)
+- **TTL jitter** — expire at `ttl ± random` so thousands of keys don't lapse in lockstep.
+- **Refresh-ahead / probabilistic early expiration** — refresh a hot key *just before* it expires, so
+  it's never actually cold.
+- **Stale-while-revalidate** — serve the slightly-stale value instantly while one background task refreshes.
+
+### Scenario B — Redis fails (cache avalanche)
+
+A Redis node (or the whole cluster) goes down or is unreachable. **Nothing** is cached, so *all* traffic
+avalanches onto the DB at once.
+
+```mermaid
+flowchart TD
+    X[Redis unreachable] --> M[100% miss]
+    M --> DB[(DB hit by full 10k/s)]
+    DB --> P{Protect the origin}
+    P --> F[Replica failover<br/>Sentinel / Cluster promotes a replica]
+    P --> CB[Circuit breaker + timeouts<br/>fail fast, don't pile up]
+    P --> LS[Load shedding / rate limit<br/>drop or queue excess]
+    P --> SF[Single-flight + request coalescing]
+    P --> L1[Serve stale from local L1<br/>degrade gracefully]
+```
+
+**Defenses (in order of prevention → mitigation):**
+1. **High availability** — replicas + **Sentinel/Cluster failover** mean a node death is a *promotion*,
+   not an empty cache. This is the primary defense: the cache rarely goes fully dark.
+2. **Circuit breaker + tight timeouts** on the Redis client — if Redis is slow/down, fail fast to the DB
+   path instead of every request blocking on a dead socket
+   ([Circuit Breaker](../../05-reliability-performance-and-modern-concepts/01-circuit-breaker.md)).
+3. **Protect the origin** — **single-flight** (coalesce identical loads), **load shedding / rate
+   limiting** ([Rate Limiting](../../05-reliability-performance-and-modern-concepts/02-rate-limiting.md),
+   [Load Shedding](../../05-reliability-performance-and-modern-concepts/03-load-shedding.md)), bulkheads,
+   and DB **read replicas** to absorb the spike.
+4. **Degrade gracefully** — serve slightly-stale data from the in-process **L1**, or a reduced/"lite"
+   response, rather than erroring. The cache is an optimization, never the source of truth.
+
+### Scenario C — Cold cache after restart/deploy
+
+Redis restarts (or you deploy a fresh cache) with an **empty** dataset. Every key misses until it's
+repopulated — a slow-burn version of the avalanche.
+
+**Defenses:**
+- **Persistence (RDB + AOF)** — a restarted Redis **reloads its keys from disk**, so it comes back
+  *warm*, not empty.
+- **Cache warming** — proactively preload known-hot keys on startup/deploy before taking full traffic.
+- **Gradual ramp** — bring the node into rotation slowly (or keep single-flight on) so the DB isn't hit
+  by a wall of cold misses.
+
+### How the cache **re-syncs** with Redis
+
+After expiry/failure/cold-start, the cache converges back to a healthy state through several mechanisms —
+usually in combination:
+
+```mermaid
+sequenceDiagram
+    participant App
+    participant Redis
+    participant DB
+    Note over Redis: recovered (failover / restart / new node)
+    App->>Redis: GET key (MISS — not yet populated)
+    App->>DB: load(key)   %% coalesced via single-flight
+    App->>Redis: SET key (repopulate)  %% lazy refill
+    Note over App,Redis: subsequent reads are HITs again
+```
+
+1. **Lazy repopulation (cache-aside)** — the natural path: each miss loads from the DB and writes back to
+   Redis, so hot keys refill within the first few requests. Single-flight ensures each key reloads once.
+2. **Redis persistence (RDB/AOF)** — on a *restart*, Redis reloads its own dataset from disk, so most keys
+   are already present (no full cold start).
+3. **Replica promotion** — on a *node failure*, a replica already holding the data is promoted, so the
+   working set is retained through the failover (near-zero re-sync needed).
+4. **Cache warming** — a job (or the app on boot) preloads the top-N hot keys so the first users don't all
+   miss.
+5. **Write-through / write-behind alignment** — writes keep Redis and the DB in step going forward, so the
+   cache doesn't re-diverge after recovery.
+6. **Invalidation broadcast** — after recovery, L1 caches are told (via pub/sub) to drop stale keys so
+   they re-pull the fresh values from L2/DB.
+
+> **Rule of thumb:** prevent the dark period with **HA + persistence**, survive it with **single-flight +
+> circuit breaker + load shedding**, and re-sync with **lazy refill + warming** — with the DB always the
+> source of truth.
+
 ## Should We Use AWS? Cloud Mapping
 
 | Concern | AWS service |
@@ -475,3 +658,12 @@ empties the cache.
 - **How do you size it?** — To hold the working set; watch hit ratio and evictions.
 - **Security concerns?** — Namespace per tenant, avoid caching sensitive data unencrypted, prevent cache poisoning, vary by identity.
 - **Biggest trade-off?** — Speed vs freshness vs memory vs invalidation complexity.
+
+### E. Distributed Cache & Redis Failure
+- **Local vs distributed cache?** — Local is fastest but per-process and lost on restart; distributed is shared, survives restarts (persistence), and scales across nodes.
+- **How does a distributed cache scale and stay available?** — Shard keys (consistent hashing / Redis Cluster hash slots) + replicas promoted on failure (Sentinel/Cluster).
+- **A hot key expires and 10k requests hit at once — what happens?** — A stampede: all miss and hit the DB. Fix with **single-flight** (1 DB load, not 10k), TTL jitter, refresh-ahead, stale-while-revalidate.
+- **Redis goes down entirely — how do you survive?** — Rely on replica **failover** first; then circuit-breaker + tight timeouts, single-flight, **load shedding/rate limiting**, DB read replicas, and serving stale from L1 — degrade, don't error.
+- **Why does a Redis restart not always mean a cold cache?** — **Persistence**: RDB snapshots + AOF let Redis reload its dataset from disk on restart.
+- **How does the cache re-sync after an outage?** — Lazy refill via cache-aside (coalesced by single-flight), persistence reload, replica promotion, cache warming of hot keys, and write-through keeping cache↔DB aligned — with the DB always the source of truth.
+- **How do you keep L1 caches coherent across instances?** — Broadcast invalidations (Redis pub/sub / client-side tracking) so every instance drops the changed key.
