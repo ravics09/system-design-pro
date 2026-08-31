@@ -1,0 +1,28 @@
+{
+  "name": "distributed-session-store",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Keep users logged in across a multi-instance cluster by storing sessions in Redis (connect-redis) so any stateless instance can serve any request.",
+  "license": "MIT",
+  "author": "Ravi Sharma <ravisharmacs09@gmail.com>",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "dev": "tsx watch src/server.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "connect-redis": "^7.1.1",
+    "express": "^4.19.2",
+    "express-session": "^1.18.0",
+    "ioredis": "^5.4.1"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/express-session": "^1.18.0",
+    "@types/node": "^20.14.0",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.4"
+  }
+}

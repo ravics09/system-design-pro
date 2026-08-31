@@ -1,0 +1,27 @@
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - reporting-mongo:/data/db
+    healthcheck:
+      test: ['CMD', 'mongosh', '--quiet', '--eval', "db.runCommand({ ping: 1 }).ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      PORT: 3124
+      MONGODB_URI: mongodb://mongo:27017/reporting
+      REFRESH_INTERVAL_MS: ${REFRESH_INTERVAL_MS:-15000}
+    depends_on:
+      mongo:
+        condition: service_healthy
+    ports:
+      - '3124:3124'
+
+volumes:
+  reporting-mongo:

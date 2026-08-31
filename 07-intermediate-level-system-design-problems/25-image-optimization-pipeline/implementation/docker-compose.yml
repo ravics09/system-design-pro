@@ -1,0 +1,15 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      PORT: 3125
+      DATA_DIR: /data
+      ALLOWED_WIDTHS: ${ALLOWED_WIDTHS:-100,200,400,800,1200}
+    volumes:
+      - image-data:/data
+    ports:
+      - '3125:3125'
+
+volumes:
+  image-data:
