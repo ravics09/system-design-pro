@@ -21,15 +21,15 @@ Focus: API design, Database modeling, and standard patterns.
 11. [Design a Shopping Cart System](./11-shopping-cart/11-shopping-cart.md) — includes a full [implementation](./11-shopping-cart/implementation/)
 12. [API Response Standardization](./12-api-response-standardization/12-api-response-standardization.md) — includes a full [implementation](./12-api-response-standardization/implementation/) (shared API platform: versioning + envelopes + tracing)
 13. [Design a Job / Task Queue](./13-simple-job-queue/13-simple-job-queue.md) — includes a full [implementation](./13-simple-job-queue/implementation/) (leases + visibility timeout, retries + backoff, DLQ, priorities, delayed jobs, worker pool)
-14. [Database Indexing](./14-database-indexing/14-database-indexing.md)
-15. [Config Management](./15-config-management/15-config-management.md)
+14. [Database Indexing](./14-database-indexing/14-database-indexing.md) — includes a full [implementation](./14-database-indexing/implementation/) (index vs full-scan planner + EXPLAIN)
+15. [Config Management](./15-config-management/15-config-management.md) — includes a full [implementation](./15-config-management/implementation/) (layered resolver + provenance + secrets + flags + versioning)
 
 ## Part 2 — Clean Architecture & Data Normalization
 
 Focus: Clean architecture, data normalization, and standard Node.js mechanisms.
 
 16. [Design a Soft-Delete System](./16-soft-delete-system/16-soft-delete-system.md)
-17. [Model a Product Catalog with Variants](./17-product-catalog-with-variants/17-product-catalog-with-variants.md)
+17. [Model a Product Catalog with Variants](./17-product-catalog-with-variants/17-product-catalog-with-variants.md) — includes a full [implementation](./17-product-catalog-with-variants/implementation/) (product + variant matrix + SKU resolution + inventory)
 18. [Design a File Download Server](./18-file-download-server/18-file-download-server.md)
 19. [Implement an API Versioning Strategy](./19-api-versioning-strategy/19-api-versioning-strategy.md) — see the shared [implementation](./19-api-versioning-strategy/implementation/)
 20. [Design a User Profile Activity Log](./20-user-profile-activity-log/20-user-profile-activity-log.md)
