@@ -1,0 +1,53 @@
+# Full shopping-app stack: MongoDB + NestJS API + Next.js storefront.
+# Quick start:  cp .env.example .env  &&  (add your WooCommerce keys)  &&  docker compose up --build
+# Then open http://localhost:3000
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ['CMD', 'mongosh', '--quiet', '--eval', "db.runCommand({ ping: 1 }).ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  server:
+    build: ./server
+    restart: unless-stopped
+    environment:
+      PORT: 3021
+      CORS_ORIGIN: http://localhost:3000
+      MONGODB_URI: mongodb://mongo:27017/shopping
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-change-me-access-secret}
+      ACCESS_TTL_S: ${ACCESS_TTL_S:-900}
+      REFRESH_TTL_S: ${REFRESH_TTL_S:-2592000}
+      WC_BASE_URL: ${WC_BASE_URL:-}
+      WC_CONSUMER_KEY: ${WC_CONSUMER_KEY:-}
+      WC_CONSUMER_SECRET: ${WC_CONSUMER_SECRET:-}
+      WC_CURRENCY: ${WC_CURRENCY:-USD}
+      CATALOG_CACHE_TTL_MS: ${CATALOG_CACHE_TTL_MS:-300000}
+      DEFAULT_PER_PAGE: ${DEFAULT_PER_PAGE:-12}
+    depends_on:
+      mongo:
+        condition: service_healthy
+    ports:
+      - '3021:3021'
+
+  web:
+    build:
+      context: ./web
+      args:
+        # Inlined at build time — the browser calls the API at this host-reachable URL.
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:3021}
+    restart: unless-stopped
+    depends_on:
+      - server
+    ports:
+      - '3000:3000'
+
+volumes:
+  mongo-data:
