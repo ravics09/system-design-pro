@@ -1,0 +1,23 @@
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      PORT: 3110
+      REDIS_URL: redis://redis:6379
+      POLL_INTERVAL_MS: ${POLL_INTERVAL_MS:-1000}
+    depends_on:
+      redis:
+        condition: service_healthy
+    ports:
+      - '3110:3110'
+    # Multiple dispatchers are safe (atomic claim): docker compose up --scale app=3
