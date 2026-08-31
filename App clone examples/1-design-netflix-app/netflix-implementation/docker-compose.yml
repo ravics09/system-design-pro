@@ -1,0 +1,49 @@
+# Full Netflix-clone stack: MongoDB + NestJS API + Next.js web.
+# Quick start:  cp .env.example .env  &&  (add your OMDB_API_KEY)  &&  docker compose up --build
+# Then open http://localhost:3000
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ['CMD', 'mongosh', '--quiet', '--eval', "db.runCommand({ ping: 1 }).ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  server:
+    build: ./server
+    restart: unless-stopped
+    environment:
+      PORT: 3020
+      CORS_ORIGIN: http://localhost:3000
+      MONGODB_URI: mongodb://mongo:27017/netflix
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-change-me-access-secret}
+      ACCESS_TTL_S: ${ACCESS_TTL_S:-900}
+      REFRESH_TTL_S: ${REFRESH_TTL_S:-2592000}
+      OMDB_API_KEY: ${OMDB_API_KEY:-}
+      OMDB_BASE_URL: ${OMDB_BASE_URL:-https://www.omdbapi.com/}
+    depends_on:
+      mongo:
+        condition: service_healthy
+    ports:
+      - '3020:3020'
+
+  web:
+    build:
+      context: ./web
+      args:
+        # Inlined at build time — the browser calls the API at this host-reachable URL.
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:3020}
+    restart: unless-stopped
+    depends_on:
+      - server
+    ports:
+      - '3000:3000'
+
+volumes:
+  mongo-data:
