@@ -1,0 +1,9 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      PORT: 3130
+      POOL_SIZE: ${POOL_SIZE:-4}
+    ports:
+      - '3130:3130'

@@ -1,0 +1,24 @@
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      PORT: 3123
+      REDIS_URL: redis://redis:6379
+      SESSION_SECRET: ${SESSION_SECRET:-dev-session-secret-change-me}
+      SESSION_TTL_S: ${SESSION_TTL_S:-1800}
+    depends_on:
+      redis:
+        condition: service_healthy
+    ports:
+      - '3123:3123'
+    # Scale to prove sessions survive across instances (shared Redis): docker compose up --scale app=3

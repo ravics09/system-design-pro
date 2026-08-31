@@ -1,0 +1,12 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      PORT: 3104
+      LEVELS: ${LEVELS:-2}
+      SPOTS_MOTORCYCLE: ${SPOTS_MOTORCYCLE:-2}
+      SPOTS_COMPACT: ${SPOTS_COMPACT:-4}
+      SPOTS_LARGE: ${SPOTS_LARGE:-2}
+    ports:
+      - '3104:3104'

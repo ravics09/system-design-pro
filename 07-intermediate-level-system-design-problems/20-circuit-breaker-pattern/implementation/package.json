@@ -1,0 +1,24 @@
+{
+  "name": "circuit-breaker-pattern",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A circuit breaker (closed/open/half-open) that fails fast after repeated downstream failures and auto-probes recovery, with a flaky-downstream demo and timeouts + fallback.",
+  "license": "MIT",
+  "author": "Ravi Sharma <ravisharmacs09@gmail.com>",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "dev": "tsx watch src/server.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.14.0",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.4"
+  }
+}

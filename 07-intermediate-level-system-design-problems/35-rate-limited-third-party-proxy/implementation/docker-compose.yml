@@ -1,0 +1,32 @@
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  upstream:
+    build: .
+    restart: unless-stopped
+    command: ['node', 'dist/upstream.js']
+    environment:
+      PORT: 4100
+
+  proxy:
+    build: .
+    restart: unless-stopped
+    environment:
+      PORT: 3135
+      REDIS_URL: redis://redis:6379
+      UPSTREAM_URL: http://upstream:4100
+      RATE_CAPACITY: ${RATE_CAPACITY:-10}
+      RATE_REFILL_PER_SEC: ${RATE_REFILL_PER_SEC:-2}
+      CACHE_TTL_S: ${CACHE_TTL_S:-30}
+    depends_on:
+      redis:
+        condition: service_healthy
+    ports:
+      - '3135:3135'

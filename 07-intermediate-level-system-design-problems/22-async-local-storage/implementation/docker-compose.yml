@@ -1,0 +1,8 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      PORT: 3122
+    ports:
+      - '3122:3122'

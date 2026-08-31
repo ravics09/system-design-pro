@@ -1,0 +1,25 @@
+{
+  "name": "distributed-id-generator",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Snowflake-style 64-bit, time-sortable, coordination-free ID generator with clock-skew protection and Redis-leased worker ids.",
+  "license": "MIT",
+  "author": "Ravi Sharma <ravisharmacs09@gmail.com>",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "dev": "tsx watch src/server.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "ioredis": "^5.4.1"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.14.0",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.4"
+  }
+}
