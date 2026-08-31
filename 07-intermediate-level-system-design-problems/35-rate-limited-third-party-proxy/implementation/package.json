@@ -1,0 +1,26 @@
+{
+  "name": "rate-limited-third-party-proxy",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A proxy that fronts a restrictive external API: a shared Redis token-bucket limiter, response caching, and single-flight coalescing so many callers share the quota without exceeding it.",
+  "license": "MIT",
+  "author": "Ravi Sharma <ravisharmacs09@gmail.com>",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "upstream": "node dist/upstream.js",
+    "dev": "tsx watch src/server.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "ioredis": "^5.4.1"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.14.0",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.4"
+  }
+}

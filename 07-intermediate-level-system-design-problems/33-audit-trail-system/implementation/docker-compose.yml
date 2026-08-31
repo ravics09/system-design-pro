@@ -1,0 +1,26 @@
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - audit-mongo:/data/db
+    healthcheck:
+      test: ['CMD', 'mongosh', '--quiet', '--eval', "db.runCommand({ ping: 1 }).ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      PORT: 3133
+      MONGODB_URI: mongodb://mongo:27017/audit
+    depends_on:
+      mongo:
+        condition: service_healthy
+    ports:
+      - '3133:3133'
+
+volumes:
+  audit-mongo:
