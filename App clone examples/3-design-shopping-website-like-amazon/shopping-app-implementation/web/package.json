@@ -1,0 +1,26 @@
+{
+  "name": "shopping-app-web",
+  "version": "1.0.0",
+  "description": "Next.js 14 + Redux Toolkit (RTK Query) Amazon-style storefront: auth, WooCommerce-backed catalog with search/filter/sort/pagination, product detail, cart, wishlist, addresses, idempotent checkout, and order history.",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p 3000",
+    "typecheck": "tsc --noEmit",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@reduxjs/toolkit": "^2.2.7",
+    "next": "^14.2.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-redux": "^9.1.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.15",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "typescript": "^5.5.4"
+  }
+}
