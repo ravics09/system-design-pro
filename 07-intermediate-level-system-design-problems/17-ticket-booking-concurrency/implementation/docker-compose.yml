@@ -1,0 +1,27 @@
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - ticketing-mongo:/data/db
+    healthcheck:
+      test: ['CMD', 'mongosh', '--quiet', '--eval', "db.runCommand({ ping: 1 }).ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      PORT: 3117
+      MONGODB_URI: mongodb://mongo:27017/ticketing
+      HOLD_TTL_MS: ${HOLD_TTL_MS:-120000}
+    depends_on:
+      mongo:
+        condition: service_healthy
+    ports:
+      - '3117:3117'
+
+volumes:
+  ticketing-mongo:

@@ -1,0 +1,30 @@
+services:
+  users-svc:
+    build: .
+    restart: unless-stopped
+    command: ['node', 'dist/upstream.js']
+    environment:
+      PORT: 4001
+      SERVICE_NAME: users
+
+  orders-svc:
+    build: .
+    restart: unless-stopped
+    command: ['node', 'dist/upstream.js']
+    environment:
+      PORT: 4002
+      SERVICE_NAME: orders
+
+  gateway:
+    build: .
+    restart: unless-stopped
+    environment:
+      PORT: 3116
+      USERS_URL: http://users-svc:4001
+      ORDERS_URL: http://orders-svc:4002
+      GATEWAY_TOKEN: ${GATEWAY_TOKEN:-dev-token}
+    depends_on:
+      - users-svc
+      - orders-svc
+    ports:
+      - '3116:3116'
