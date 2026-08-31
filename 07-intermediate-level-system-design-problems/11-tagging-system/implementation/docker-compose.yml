@@ -1,0 +1,26 @@
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - tagging-mongo:/data/db
+    healthcheck:
+      test: ['CMD', 'mongosh', '--quiet', '--eval', "db.runCommand({ ping: 1 }).ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      PORT: 3111
+      MONGODB_URI: mongodb://mongo:27017/tagging
+    depends_on:
+      mongo:
+        condition: service_healthy
+    ports:
+      - '3111:3111'
+
+volumes:
+  tagging-mongo:
