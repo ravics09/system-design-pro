@@ -1,0 +1,43 @@
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - chat-mongo:/data/db
+    healthcheck:
+      test: ['CMD', 'mongosh', '--quiet', '--eval', "db.runCommand({ ping: 1 }).ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      PORT: 3101
+      MONGODB_URI: mongodb://mongo:27017/chat
+      REDIS_URL: redis://redis:6379
+      AUTH_SECRET: ${AUTH_SECRET:-dev-chat-secret-change-me}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - '3101:3101'
+
+  # Scale horizontally to prove the Redis adapter fans out across instances:
+  #   docker compose up --scale app=3   (put a load balancer in front for real use)
+
+volumes:
+  chat-mongo:
