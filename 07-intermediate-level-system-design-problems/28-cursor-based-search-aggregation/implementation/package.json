@@ -1,0 +1,25 @@
+{
+  "name": "cursor-based-search-aggregation",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Fast MongoDB search: token ($all) matching over a multikey index with keyset (cursor) pagination that stays O(page size) at any depth and doesn't drift.",
+  "license": "MIT",
+  "author": "Ravi Sharma <ravisharmacs09@gmail.com>",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "dev": "tsx watch src/server.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "mongoose": "^8.6.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.14.0",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.4"
+  }
+}

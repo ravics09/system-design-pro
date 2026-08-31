@@ -1,0 +1,27 @@
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - cms-mongo:/data/db
+    healthcheck:
+      test: ['CMD', 'mongosh', '--quiet', '--eval', "db.runCommand({ ping: 1 }).ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      PORT: 3129
+      MONGODB_URI: mongodb://mongo:27017/cms
+      PUBLISH_INTERVAL_MS: ${PUBLISH_INTERVAL_MS:-5000}
+    depends_on:
+      mongo:
+        condition: service_healthy
+    ports:
+      - '3129:3129'
+
+volumes:
+  cms-mongo:
