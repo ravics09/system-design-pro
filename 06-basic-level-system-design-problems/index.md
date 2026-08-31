@@ -20,7 +20,7 @@ Focus: API design, Database modeling, and standard patterns.
 10. [Design a Caching Layer System](./10-caching-layer/10-caching-layer.md) — includes a full [implementation](./10-caching-layer/implementation/)
 11. [Design a Shopping Cart System](./11-shopping-cart/11-shopping-cart.md) — includes a full [implementation](./11-shopping-cart/implementation/)
 12. [API Response Standardization](./12-api-response-standardization/12-api-response-standardization.md) — includes a full [implementation](./12-api-response-standardization/implementation/) (shared API platform: versioning + envelopes + tracing)
-13. [Simple Job Queue](./13-simple-job-queue/13-simple-job-queue.md)
+13. [Design a Job / Task Queue](./13-simple-job-queue/13-simple-job-queue.md) — includes a full [implementation](./13-simple-job-queue/implementation/) (leases + visibility timeout, retries + backoff, DLQ, priorities, delayed jobs, worker pool)
 14. [Database Indexing](./14-database-indexing/14-database-indexing.md)
 15. [Config Management](./15-config-management/15-config-management.md)
 
